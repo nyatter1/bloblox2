@@ -1285,7 +1285,7 @@ export default function BaseplateGame({
               playerPosRef.current.z >= pZ - halfZ - charRadius &&
               playerPosRef.current.z <= pZ + halfZ + charRadius
             ) {
-              if (playerPosRef.current.y >= partTop - 0.7) {
+              if (playerPosRef.current.y >= partTop - 2.0) {
                 floorY = Math.max(floorY, partTop);
               }
             }
@@ -1295,7 +1295,7 @@ export default function BaseplateGame({
         playerVelocityYRef.current -= 34 * delta;
         playerPosRef.current.y += playerVelocityYRef.current * delta;
 
-        if (playerPosRef.current.y <= floorY) {
+        if (playerPosRef.current.y <= floorY + 0.2) {
           playerPosRef.current.y = floorY;
           playerVelocityYRef.current = 0;
           isGroundedRef.current = true;

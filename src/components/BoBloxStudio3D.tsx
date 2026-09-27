@@ -1696,8 +1696,8 @@ part.Touched:Connect(onTouch)`,
         let floorY = baseplateEnabledRef.current ? 0 : -999;
         curParts.forEach((part) => {
           if (part.canCollide !== false) {
-            const hx = part.size[0] / 2 + 0.6;
-            const hz = part.size[2] / 2 + 0.6;
+            const hx = part.size[0] / 2 + 0.7;
+            const hz = part.size[2] / 2 + 0.7;
             if (
               playerPosRef.current.x >= part.position[0] - hx &&
               playerPosRef.current.x <= part.position[0] + hx &&
@@ -1705,14 +1705,14 @@ part.Touched:Connect(onTouch)`,
               playerPosRef.current.z <= part.position[2] + hz
             ) {
               const partTop = part.position[1] + part.size[1] / 2;
-              if (playerPosRef.current.y >= partTop - 0.7) {
+              if (playerPosRef.current.y >= partTop - 2.0) {
                 floorY = Math.max(floorY, partTop);
               }
             }
           }
         });
 
-        if (playerPosRef.current.y <= floorY) {
+        if (playerPosRef.current.y <= floorY + 0.2) {
           playerPosRef.current.y = floorY;
           playerVelocityYRef.current = 0;
           isGroundedRef.current = true;
