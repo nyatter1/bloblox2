@@ -59,6 +59,7 @@ import { createAccessoryMesh } from '../utils/accessoryMesh';
 import { applyTextureProperties, PRESET_TEXTURES } from '../utils/textureMapping';
 import { LuaScriptRunner, ScriptLogMessage } from '../utils/luaScriptEngine';
 import { RagdollShatterManager } from '../utils/ragdollShatter';
+import { gameAudio } from '../utils/gameAudio';
 import StudioScriptEditor from './StudioScriptEditor';
 
 interface BoBloxStudio3DProps {
@@ -432,23 +433,8 @@ end`,
     setIsDead(true);
     setDeathCountdown(3);
 
-    // Play classic Roblox OOF / Death audio synth
-    try {
-      const audioCtx = new (window.AudioContext || (window as any).webkitAudioContext)();
-      const osc = audioCtx.createOscillator();
-      const gain = audioCtx.createGain();
-      osc.type = 'sawtooth';
-      osc.frequency.setValueAtTime(140, audioCtx.currentTime);
-      osc.frequency.exponentialRampToValueAtTime(70, audioCtx.currentTime + 0.35);
-      gain.gain.setValueAtTime(0.3, audioCtx.currentTime);
-      gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.35);
-      osc.connect(gain);
-      gain.connect(audioCtx.destination);
-      osc.start();
-      osc.stop(audioCtx.currentTime + 0.35);
-    } catch {
-      // ignore
-    }
+    // Play classic Roblox OOF / Death audio
+    gameAudio.playDeathSound();
 
     // Hide intact player group and trigger physics shattering of all 6 limbs!
     if (playerCharacterGroupRef.current && sceneRef.current) {
@@ -1251,6 +1237,7 @@ part.Touched:Connect(onTouch)`,
         if (e.code === 'Space' && isGroundedRef.current) {
           playerVelocityYRef.current = 15.5;
           isGroundedRef.current = false;
+          gameAudio.playJumpSound();
         }
       }
     };
@@ -1733,6 +1720,10 @@ part.Touched:Connect(onTouch)`,
           isGroundedRef.current = false;
         }
 
+        // Footstep walking audio loop
+        const isActuallyWalking = isMoving && isGroundedRef.current && !isDead;
+        gameAudio.setWalking(isActuallyWalking);
+
         // Void Fall Kill Brick
         if (playerPosRef.current.y < -40 && !isDead) {
           triggerPlayerDeath();
@@ -1869,6 +1860,7 @@ part.Touched:Connect(onTouch)`,
       luaRunnerRef.current.stop();
       ragdollManagerRef.current.cleanup();
       partMeshesMapRef.current.clear();
+      gameAudio.stopWalking();
     };
   }, [baseplateColor, avatarColors, selectedFaceId, shirtDataUrl, pantsDataUrl, handleTogglePlaytest, handleUndo, handleRedo, triggerPlayerDeath, playerWalkSpeed, playerHealth]);
 

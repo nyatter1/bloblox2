@@ -27,6 +27,7 @@ import { createHairMesh, createHairMeshAsync } from '../utils/hairMesh';
 import { ExperienceData, StudioPart } from '../types/experience';
 import { applyTextureProperties } from '../utils/textureMapping';
 import { RagdollShatterManager } from '../utils/ragdollShatter';
+import { gameAudio } from '../utils/gameAudio';
 import {
   UserProfile,
   LivePlayerPresence,
@@ -499,6 +500,7 @@ export default function BaseplateGame({
     if (isGroundedRef.current) {
       playerVelocityYRef.current = 15.5;
       isGroundedRef.current = false;
+      gameAudio.playJumpSound();
       // Immediately broadcast jumping state to Firestore
       updateGamePresence(expId, effectiveUser.id, {
         position: [
@@ -515,6 +517,8 @@ export default function BaseplateGame({
 
   const sceneRef = useRef<THREE.Scene | null>(null);
   const ragdollManagerRef = useRef<RagdollShatterManager>(new RagdollShatterManager());
+  const remoteRagdollsRef = useRef<Map<string, RagdollShatterManager>>(new Map());
+  const remotePrevDeadRef = useRef<Map<string, boolean>>(new Map());
   const lastBroadcastMovingRef = useRef<boolean>(false);
   const lastBroadcastJumpingRef = useRef<boolean>(false);
 
@@ -524,23 +528,20 @@ export default function BaseplateGame({
     isDeadRef.current = true;
     setDeathCountdown(3);
 
-    // Play classic Roblox OOF / Death audio synth
-    try {
-      const audioCtx = new (window.AudioContext || (window as any).webkitAudioContext)();
-      const osc = audioCtx.createOscillator();
-      const gain = audioCtx.createGain();
-      osc.type = 'sawtooth';
-      osc.frequency.setValueAtTime(140, audioCtx.currentTime);
-      osc.frequency.exponentialRampToValueAtTime(70, audioCtx.currentTime + 0.35);
-      gain.gain.setValueAtTime(0.3, audioCtx.currentTime);
-      gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.35);
-      osc.connect(gain);
-      gain.connect(audioCtx.destination);
-      osc.start();
-      osc.stop(audioCtx.currentTime + 0.35);
-    } catch {
-      // ignore
-    }
+    // Play classic Roblox OOF / Death audio
+    gameAudio.playDeathSound();
+
+    // Broadcast death state to Firestore so all remote players see the ragdoll shatter in real-time!
+    updateGamePresence(expId, effectiveUser.id, {
+      isDead: true,
+      isMoving: false,
+      isJumping: false,
+      position: [
+        Math.round(playerPosRef.current.x * 10) / 10,
+        Math.round(playerPosRef.current.y * 10) / 10,
+        Math.round(playerPosRef.current.z * 10) / 10,
+      ],
+    });
 
     if (limbsRef.current.characterGroup) {
       limbsRef.current.characterGroup.visible = false;
@@ -585,6 +586,14 @@ export default function BaseplateGame({
           limbsRef.current.characterGroup.visible = true;
           limbsRef.current.characterGroup.position.set(spawnPos[0], spawnPos[1], spawnPos[2]);
         }
+
+        // Broadcast alive/respawn state to Firestore
+        updateGamePresence(expId, effectiveUser.id, {
+          isDead: false,
+          position: spawnPos,
+          isMoving: false,
+          isJumping: false,
+        });
       }
     }, 1000);
   };
@@ -1351,6 +1360,10 @@ export default function BaseplateGame({
             leftLeg.rotation.set(0, 0, 0);
             rightLeg.rotation.set(0, 0, 0);
           }
+
+          // Footstep walking audio loop
+          const isActuallyWalking = isMoving && isGroundedRef.current && !isDeadRef.current;
+          gameAudio.setWalking(isActuallyWalking);
         }
 
         // Camera Follow
@@ -1415,6 +1428,12 @@ export default function BaseplateGame({
           entry.detachPants();
           scene.remove(entry.group);
           currentRemoteMap.delete(uid);
+          const ragdoll = remoteRagdollsRef.current.get(uid);
+          if (ragdoll) {
+            ragdoll.cleanup();
+            remoteRagdollsRef.current.delete(uid);
+          }
+          remotePrevDeadRef.current.delete(uid);
         }
       });
 
@@ -1436,6 +1455,7 @@ export default function BaseplateGame({
             faceId: rp.selectedFaceId || 'classic-smile',
             hairId: rp.selectedHairId,
             hairColor: rp.hairColor,
+            customHairObj: rp.customHairObj,
             accessoryId: rp.selectedAccessoryId,
             shirtUrl: rp.shirtDataUrl,
             pantsUrl: rp.pantsDataUrl,
@@ -1461,6 +1481,52 @@ export default function BaseplateGame({
             detachPants: rChar.detachPants,
           };
           currentRemoteMap.set(rp.userId, entry);
+        }
+
+        // Handle remote player death shattering in real-time
+        const wasDead = remotePrevDeadRef.current.get(rp.userId) || false;
+        const isNowDead = !!rp.isDead;
+
+        if (isNowDead) {
+          entry.group.visible = false;
+          if (!wasDead) {
+            remotePrevDeadRef.current.set(rp.userId, true);
+            let ragdoll = remoteRagdollsRef.current.get(rp.userId);
+            if (!ragdoll) {
+              ragdoll = new RagdollShatterManager();
+              remoteRagdollsRef.current.set(rp.userId, ragdoll);
+            }
+            ragdoll.shatterCharacter(
+              entry.group.position,
+              scene,
+              rp.avatarColors || {
+                head: DEFAULT_GREY,
+                torso: DEFAULT_GREY,
+                leftArm: DEFAULT_GREY,
+                rightArm: DEFAULT_GREY,
+                leftLeg: DEFAULT_GREY,
+                rightLeg: DEFAULT_GREY,
+              },
+              rp.selectedFaceId || 'classic-smile',
+              () => {},
+              rp.shirtDataUrl,
+              rp.pantsDataUrl,
+              rp.selectedHairId,
+              rp.hairColor,
+              rp.customHairObj,
+              rp.selectedAccessoryId
+            );
+            gameAudio.playDeathSound();
+          }
+        } else {
+          if (wasDead) {
+            remotePrevDeadRef.current.set(rp.userId, false);
+            const ragdoll = remoteRagdollsRef.current.get(rp.userId);
+            if (ragdoll) {
+              ragdoll.cleanup();
+            }
+          }
+          entry.group.visible = true;
         }
 
         // Smooth Exponential Decay Interpolation (removes lag/jitter completely)
@@ -1543,6 +1609,9 @@ export default function BaseplateGame({
         scene.remove(entry.group);
       });
       remotePlayerMeshesRef.current.clear();
+      remoteRagdollsRef.current.forEach((r) => r.cleanup());
+      remoteRagdollsRef.current.clear();
+      gameAudio.stopWalking();
 
       window.removeEventListener('keydown', onKeyDown);
       window.removeEventListener('keyup', onKeyUp);
