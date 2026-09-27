@@ -16,7 +16,7 @@ import {
   Check
 } from 'lucide-react';
 import AvatarProfileIcon from './AvatarProfileIcon';
-import VerifiedBadge, { isOwnerUser } from './VerifiedBadge';
+import VerifiedBadge, { isOwnerUser, isCoOwnerUser, isVerifiedUser } from './VerifiedBadge';
 import {
   UserProfile,
   sendFriendRequest,
@@ -195,7 +195,7 @@ export default function UserProfileModal({
                 <div className="flex items-center justify-center sm:justify-start gap-2">
                   <h2 className="text-xl sm:text-2xl font-black text-white tracking-wide flex items-center gap-1.5">
                     <span>{profile.displayName || profile.username}</span>
-                    {isOwnerUser(profile.username) && <VerifiedBadge size="md" />}
+                    {isVerifiedUser(profile.username) && <VerifiedBadge username={profile.username} size="md" />}
                   </h2>
                   {profile.currentExperienceId ? (
                     <span className="flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-emerald-500/20 border border-emerald-400/40 text-emerald-300 text-[10px] font-bold">
@@ -217,6 +217,11 @@ export default function UserProfileModal({
                   {isOwnerUser(profile.username) && (
                     <span className="text-[10px] font-sans px-1.5 py-0.2 rounded bg-purple-500/20 text-purple-300 border border-purple-400/30">
                       Owner
+                    </span>
+                  )}
+                  {isCoOwnerUser(profile.username) && (
+                    <span className="text-[10px] font-sans px-1.5 py-0.2 rounded bg-cyan-500/20 text-cyan-300 border border-cyan-400/30">
+                      Co-Owner
                     </span>
                   )}
                 </p>

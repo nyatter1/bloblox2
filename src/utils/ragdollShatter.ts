@@ -1,6 +1,10 @@
 import * as THREE from 'three';
 import { AvatarColors } from '../components/AvatarViewer';
 import { createFaceMesh } from './faceTexture';
+import { attachShirtToLimbs } from './shirtTexture';
+import { attachPantsToLimbs } from './pantsTexture';
+import { createHairMesh, createHairMeshAsync } from './hairMesh';
+import { createAccessoryMesh } from './accessoryMesh';
 
 export interface ShatteredPiece {
   mesh: THREE.Object3D;
@@ -19,7 +23,13 @@ export class RagdollShatterManager {
     scene: THREE.Scene,
     colors: AvatarColors,
     faceId: string = 'classic-smile',
-    onRespawn?: () => void
+    onRespawn?: () => void,
+    shirtUrl?: string | null,
+    pantsUrl?: string | null,
+    hairId?: string,
+    hairColor?: string,
+    customHairObj?: string | null,
+    accessoryId?: string
   ) {
     this.cleanup();
     this.scene = scene;
@@ -65,6 +75,26 @@ export class RagdollShatterManager {
     const faceMesh = createFaceMesh(faceId);
     headGroup.add(faceMesh);
 
+    // Hair
+    if (hairId && hairId !== 'none') {
+      const hairMesh = createHairMesh(hairId, hairColor || '#4a2e1b', customHairObj);
+      if (hairMesh) {
+        headGroup.add(hairMesh);
+      } else {
+        createHairMeshAsync(hairId, hairColor || '#4a2e1b', customHairObj)
+          .then((asyncHair) => {
+            if (asyncHair) headGroup.add(asyncHair);
+          })
+          .catch(() => {});
+      }
+    }
+
+    // Accessory
+    if (accessoryId && accessoryId !== 'none') {
+      const accMesh = createAccessoryMesh(accessoryId);
+      if (accMesh) headGroup.add(accMesh);
+    }
+
     scene.add(headGroup);
     this.addPiece(headGroup, 1.6);
 
@@ -97,6 +127,14 @@ export class RagdollShatterManager {
     rightLegMesh.castShadow = true;
     scene.add(rightLegMesh);
     this.addPiece(rightLegMesh, 1.1);
+
+    // Attach Shirt & Pants textures to severed pieces
+    if (shirtUrl) {
+      attachShirtToLimbs(torsoMesh, leftArmMesh, rightArmMesh, shirtUrl);
+    }
+    if (pantsUrl) {
+      attachPantsToLimbs(torsoMesh, leftLegMesh, rightLegMesh, pantsUrl);
+    }
 
     // Start physics simulation
     this.startPhysicsLoop();

@@ -44,7 +44,7 @@ import {
   subscribeExperienceById
 } from '../services/firebase';
 import AvatarProfileIcon from './AvatarProfileIcon';
-import VerifiedBadge, { isOwnerUser } from './VerifiedBadge';
+import VerifiedBadge, { isOwnerUser, isVerifiedUser } from './VerifiedBadge';
 
 interface BaseplateGameProps {
   onLeaveGame: () => void;
@@ -76,7 +76,7 @@ function createNametagSprite(username: string): THREE.Sprite {
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
 
-  if (isOwnerUser(username)) {
+  if (isVerifiedUser(username)) {
     ctx.fillStyle = '#38bdf8';
     ctx.fillText(`${username} ✔`, 128, 32);
   } else {
@@ -552,7 +552,13 @@ export default function BaseplateGame({
         sceneRef.current,
         avatarColors,
         selectedFaceId,
-        () => {}
+        () => {},
+        shirtDataUrl,
+        pantsDataUrl,
+        selectedHairId,
+        hairColor,
+        customHairObj,
+        selectedAccessoryId
       );
     }
 
@@ -1749,7 +1755,7 @@ export default function BaseplateGame({
                   <div key={msg.id} className="leading-snug break-words flex items-start gap-1">
                     <span className="font-extrabold text-purple-300 mr-1 shrink-0 inline-flex items-center gap-1">
                       <span>[{msg.senderUsername}]</span>
-                      {isOwnerUser(msg.senderUsername) && <VerifiedBadge size="sm" />}
+                      {isVerifiedUser(msg.senderUsername) && <VerifiedBadge username={msg.senderUsername} size="sm" />}
                       <span>:</span>
                     </span>
                     <span className="text-slate-100">{msg.message}</span>

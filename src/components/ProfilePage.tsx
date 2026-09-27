@@ -25,7 +25,7 @@ import {
   ArrowRight
 } from 'lucide-react';
 import AvatarProfileIcon from './AvatarProfileIcon';
-import VerifiedBadge, { isOwnerUser } from './VerifiedBadge';
+import VerifiedBadge, { isOwnerUser, isCoOwnerUser, isVerifiedUser } from './VerifiedBadge';
 import {
   UserProfile,
   sendFriendRequest,
@@ -84,11 +84,6 @@ export default function ProfilePage({
 
   // Inventory tab filter
   const [inventoryFilter, setInventoryFilter] = useState<'all' | 'shirts' | 'pants'>('all');
-
-  // 3D Avatar Turntable Canvas in About Tab
-  const mount3DRef = useRef<HTMLDivElement | null>(null);
-  const [autoRotate, setAutoRotate] = useState(false);
-  const character3DRef = useRef<THREE.Group | null>(null);
 
   const isSelf = userId === currentUserId;
 
@@ -155,208 +150,6 @@ export default function ProfilePage({
     setTimeout(() => setCopiedLink(false), 2200);
   };
 
-  // Setup 3D Interactive Avatar Stage in "About" Tab
-  useEffect(() => {
-    if (activeTab !== 'about' || !mount3DRef.current || !profile) return;
-
-    const container = mount3DRef.current;
-    const width = container.clientWidth || 320;
-    const height = container.clientHeight || 360;
-
-    const scene = new THREE.Scene();
-    const camera = new THREE.PerspectiveCamera(40, width / height, 0.1, 50);
-    camera.position.set(0.2, 2.7, 7.2);
-    camera.lookAt(0, 2.4, 0);
-
-    const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
-    renderer.setSize(width, height);
-    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-    renderer.shadowMap.enabled = true;
-    container.innerHTML = '';
-    container.appendChild(renderer.domElement);
-
-    // Platform
-    const platformGeo = new THREE.CylinderGeometry(2.3, 2.5, 0.25, 48);
-    const platformMat = new THREE.MeshStandardMaterial({
-      color: 0x221345,
-      metalness: 0.6,
-      roughness: 0.3,
-    });
-    const platform = new THREE.Mesh(platformGeo, platformMat);
-    platform.position.y = -0.15;
-    scene.add(platform);
-
-    const ringGeo = new THREE.RingGeometry(2.1, 2.45, 48);
-    const ringMat = new THREE.MeshBasicMaterial({ color: 0x9333ea, side: THREE.DoubleSide });
-    const ring = new THREE.Mesh(ringGeo, ringMat);
-    ring.rotation.x = -Math.PI / 2;
-    ring.position.y = 0.01;
-    scene.add(ring);
-
-    // Lighting (balanced neutral lighting to render exact avatar colors accurately without blue/purple tint)
-    const amb = new THREE.AmbientLight(0xffffff, 1.5);
-    scene.add(amb);
-    const sun = new THREE.DirectionalLight(0xfffdf8, 2.2);
-    sun.position.set(5, 10, 6);
-    scene.add(sun);
-    const fill = new THREE.DirectionalLight(0xfff7ed, 0.6);
-    fill.position.set(-5, 4, -4);
-    scene.add(fill);
-
-    // Build Character
-    const characterGroup = new THREE.Group();
-    character3DRef.current = characterGroup;
-    scene.add(characterGroup);
-
-    const colors = profile.avatarColors || {
-      head: DEFAULT_GREY,
-      torso: DEFAULT_GREY,
-      leftArm: DEFAULT_GREY,
-      rightArm: DEFAULT_GREY,
-      leftLeg: DEFAULT_GREY,
-      rightLeg: DEFAULT_GREY,
-    };
-
-    const createMat = (hex: string) =>
-      new THREE.MeshStandardMaterial({
-        color: new THREE.Color(hex || DEFAULT_GREY),
-        roughness: 0.45,
-        metalness: 0.08,
-      });
-
-    // Torso
-    const torsoGeo = new THREE.BoxGeometry(2, 2, 1);
-    const torsoMesh = new THREE.Mesh(torsoGeo, createMat(colors.torso));
-    torsoMesh.position.set(0, 3, 0);
-    characterGroup.add(torsoMesh);
-
-    // Head
-    const headGroup = new THREE.Group();
-    headGroup.position.set(0, 4.7, 0);
-    const cylinderGeo = new THREE.CylinderGeometry(0.625, 0.625, 0.95, 32);
-    const headCylinder = new THREE.Mesh(cylinderGeo, createMat(colors.head));
-    headGroup.add(headCylinder);
-
-    const topCapGeo = new THREE.SphereGeometry(0.625, 32, 14, 0, Math.PI * 2, 0, Math.PI / 2);
-    topCapGeo.scale(1, 0.35, 1);
-    const topCap = new THREE.Mesh(topCapGeo, createMat(colors.head));
-    topCap.position.y = 0.475;
-    headGroup.add(topCap);
-
-    const botCapGeo = new THREE.SphereGeometry(0.625, 32, 14, 0, Math.PI * 2, Math.PI / 2, Math.PI / 2);
-    botCapGeo.scale(1, 0.35, 1);
-    const botCap = new THREE.Mesh(botCapGeo, createMat(colors.head));
-    botCap.position.y = -0.475;
-    headGroup.add(botCap);
-
-    // Face
-    const faceMesh = createFaceMesh(profile.selectedFaceId || 'classic-smile');
-    headGroup.add(faceMesh);
-
-    // Hair
-    if (profile.selectedHairId && profile.selectedHairId !== 'none') {
-      const hairMesh = createHairMesh(profile.selectedHairId, profile.hairColor || '#4a2e1b');
-      if (hairMesh) headGroup.add(hairMesh);
-    }
-    characterGroup.add(headGroup);
-
-    // Arms
-    const armGeo = new THREE.BoxGeometry(1, 2, 1);
-    const leftArmGroup = new THREE.Group();
-    leftArmGroup.position.set(1.5, 4, 0);
-    const leftArmMesh = new THREE.Mesh(armGeo, createMat(colors.leftArm));
-    leftArmMesh.position.set(0, -1, 0);
-    leftArmGroup.add(leftArmMesh);
-    characterGroup.add(leftArmGroup);
-
-    const rightArmGroup = new THREE.Group();
-    rightArmGroup.position.set(-1.5, 4, 0);
-    const rightArmMesh = new THREE.Mesh(armGeo, createMat(colors.rightArm));
-    rightArmMesh.position.set(0, -1, 0);
-    rightArmGroup.add(rightArmMesh);
-    characterGroup.add(rightArmGroup);
-
-    // Legs
-    const legGeo = new THREE.BoxGeometry(1, 2, 1);
-    const leftLegGroup = new THREE.Group();
-    leftLegGroup.position.set(0.5, 2, 0);
-    const leftLegMesh = new THREE.Mesh(legGeo, createMat(colors.leftLeg));
-    leftLegMesh.position.set(0, -1, 0);
-    leftLegGroup.add(leftLegMesh);
-    characterGroup.add(leftLegGroup);
-
-    const rightLegGroup = new THREE.Group();
-    rightLegGroup.position.set(-0.5, 2, 0);
-    const rightLegMesh = new THREE.Mesh(legGeo, createMat(colors.rightLeg));
-    rightLegMesh.position.set(0, -1, 0);
-    rightLegGroup.add(rightLegMesh);
-    characterGroup.add(rightLegGroup);
-
-    // Attach Shirt & Pants textures
-    if (profile.shirtDataUrl) {
-      attachShirtToLimbs(torsoMesh, leftArmGroup, rightArmGroup, profile.shirtDataUrl, () => {
-        renderer.render(scene, camera);
-      });
-    }
-    if (profile.pantsDataUrl) {
-      attachPantsToLimbs(torsoMesh, leftLegGroup, rightLegGroup, profile.pantsDataUrl, () => {
-        renderer.render(scene, camera);
-      });
-    }
-
-    // Drag rotation controls
-    let isDragging = false;
-    let previousMouseX = 0;
-
-    const onPointerDown = (e: PointerEvent) => {
-      isDragging = true;
-      previousMouseX = e.clientX;
-    };
-    const onPointerMove = (e: PointerEvent) => {
-      if (!isDragging) return;
-      const deltaX = e.clientX - previousMouseX;
-      characterGroup.rotation.y += deltaX * 0.012;
-      previousMouseX = e.clientX;
-    };
-    const onPointerUp = () => {
-      isDragging = false;
-    };
-
-    container.addEventListener('pointerdown', onPointerDown);
-    window.addEventListener('pointermove', onPointerMove);
-    window.addEventListener('pointerup', onPointerUp);
-
-    // Animation Loop
-    let animId: number;
-    const animate = () => {
-      animId = requestAnimationFrame(animate);
-      if (autoRotate && !isDragging) {
-        characterGroup.rotation.y += 0.008;
-      }
-      renderer.render(scene, camera);
-    };
-    animate();
-
-    const handleResize = () => {
-      if (!container) return;
-      const w = container.clientWidth;
-      const h = container.clientHeight;
-      camera.aspect = w / h;
-      camera.updateProjectionMatrix();
-      renderer.setSize(w, h);
-    };
-    window.addEventListener('resize', handleResize);
-
-    return () => {
-      cancelAnimationFrame(animId);
-      container.removeEventListener('pointerdown', onPointerDown);
-      window.removeEventListener('pointermove', onPointerMove);
-      window.removeEventListener('pointerup', onPointerUp);
-      window.removeEventListener('resize', handleResize);
-      renderer.dispose();
-    };
-  }, [activeTab, profile, autoRotate]);
-
   if (loading || !profile) {
     return (
       <div className="p-16 flex flex-col items-center justify-center gap-4 text-center">
@@ -367,6 +160,8 @@ export default function ProfilePage({
   }
 
   const isOwner = isOwnerUser(profile.username);
+  const isCoOwner = isCoOwnerUser(profile.username);
+  const isVerified = isVerifiedUser(profile.username);
 
   return (
     <div className="space-y-6 pb-20 animate-fadeIn max-w-7xl mx-auto">
@@ -377,7 +172,7 @@ export default function ProfilePage({
         <div className="absolute inset-0 bg-[linear-gradient(to_right,#ffffff05_1px,transparent_1px),linear-gradient(to_bottom,#ffffff05_1px,transparent_1px)] bg-[size:32px_32px] opacity-40" />
 
         {/* Static Profile Hero Banner with Clean Studio Aesthetics */}
-        <div className="h-36 sm:h-48 relative overflow-hidden flex items-center justify-between px-6 sm:px-10">
+        <div className="h-44 sm:h-52 relative overflow-hidden flex items-center justify-between px-6 sm:px-10">
           <div className="relative z-10 flex items-center gap-4">
             <div className="w-10 h-10 rounded-2xl bg-purple-500/20 border border-purple-400/30 flex items-center justify-center backdrop-blur-md">
               <Sparkles className="w-5 h-5 text-purple-300" />
@@ -393,6 +188,24 @@ export default function ProfilePage({
               <p className="text-sm sm:text-base font-bold text-white/90 drop-shadow">
                 {profile.username}&apos;s Official BoBlox Profile
               </p>
+            </div>
+          </div>
+
+          {/* Static Avatar Showcase in Banner */}
+          <div className="hidden sm:flex items-center gap-4 relative z-10 mr-12">
+            <div className="p-1 rounded-2xl bg-gradient-to-b from-purple-500/30 to-purple-900/30 border border-purple-400/30 shadow-xl backdrop-blur-md">
+              <AvatarProfileIcon
+                colors={profile.avatarColors}
+                selectedFaceId={profile.selectedFaceId}
+                shirtDataUrl={profile.shirtDataUrl}
+                pantsDataUrl={profile.pantsDataUrl}
+                selectedHairId={profile.selectedHairId}
+                hairColor={profile.hairColor}
+                size={96}
+                shape="rounded"
+                border={false}
+                fullBody={true}
+              />
             </div>
           </div>
 
@@ -454,10 +267,15 @@ export default function ProfilePage({
                 <h1 className="text-2xl sm:text-3xl font-display font-black text-white tracking-tight">
                   {profile.username}
                 </h1>
-                {isOwner && <VerifiedBadge size="md" />}
+                {isVerified && <VerifiedBadge username={profile.username} size="md" />}
                 {isOwner && (
                   <span className="px-2 py-0.5 rounded-md bg-purple-600/30 border border-purple-400/40 text-[11px] font-extrabold text-purple-300">
                     OWNER
+                  </span>
+                )}
+                {isCoOwner && (
+                  <span className="px-2 py-0.5 rounded-md bg-cyan-600/30 border border-cyan-400/40 text-[11px] font-extrabold text-cyan-300">
+                    CO-OWNER
                   </span>
                 )}
               </div>
@@ -626,51 +444,26 @@ export default function ProfilePage({
 
       {/* ================= 3. TAB CONTENT ================= */}
 
-      {/* TAB 1: ABOUT & 3D AVATAR STAGE */}
+      {/* TAB 1: ABOUT & CHARACTER EQUIPMENT */}
       {activeTab === 'about' && (
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-          {/* Left Column: 3D Turntable Avatar Stage (lg:col-span-5) */}
+          {/* Left Column: Currently Wearing Card & Quick Links (lg:col-span-5) */}
           <div className="lg:col-span-5 space-y-4">
-            <div className="rounded-2xl bg-[#140e29] border border-purple-500/20 p-4 shadow-xl relative overflow-hidden">
-              <div className="flex items-center justify-between mb-2">
-                <span className="text-xs font-extrabold uppercase tracking-wider text-purple-300/80 font-mono flex items-center gap-1.5">
-                  <Sparkles className="w-3.5 h-3.5 text-purple-400" />
-                  <span>3D Avatar View</span>
-                </span>
-                <button
-                  onClick={() => setAutoRotate(!autoRotate)}
-                  className={`px-2 py-1 rounded-md text-[10px] font-bold border transition-colors cursor-pointer ${
-                    autoRotate
-                      ? 'bg-purple-600/30 border-purple-400 text-purple-200'
-                      : 'bg-purple-950/40 border-purple-500/20 text-purple-400 hover:text-white'
-                  }`}
-                >
-                  {autoRotate ? 'Auto-Spin: ON' : 'Auto-Spin: OFF'}
-                </button>
-              </div>
-
-              {/* Canvas Container */}
-              <div
-                ref={mount3DRef}
-                className="w-full h-80 sm:h-96 rounded-xl bg-gradient-to-b from-[#1c1236] to-[#0c0817] flex items-center justify-center cursor-grab active:cursor-grabbing border border-purple-500/15"
-                title="Drag to rotate character"
-              />
-
-              <p className="text-center text-[11px] text-purple-400/60 mt-2">
-                Drag horizontally to rotate 360&deg;
-              </p>
-            </div>
-
             {/* Currently Wearing Card */}
-            <div className="rounded-2xl bg-[#140e29] border border-purple-500/20 p-5 space-y-3">
-              <h3 className="font-display font-bold text-white text-sm flex items-center gap-2">
-                <Shirt className="w-4 h-4 text-purple-400" />
-                <span>Currently Wearing</span>
-              </h3>
+            <div className="rounded-2xl bg-[#140e29] border border-purple-500/20 p-5 space-y-4 shadow-xl">
+              <div className="flex items-center justify-between border-b border-purple-500/15 pb-3">
+                <h3 className="font-display font-bold text-white text-base flex items-center gap-2">
+                  <Shirt className="w-4 h-4 text-purple-400" />
+                  <span>Currently Wearing</span>
+                </h3>
+                <span className="text-[10px] px-2 py-0.5 rounded bg-purple-900/40 text-purple-300 font-mono">
+                  R6 Rig
+                </span>
+              </div>
 
               <div className="grid grid-cols-2 gap-3 text-xs">
                 {/* Shirt item */}
-                <div className="p-3 rounded-xl bg-purple-950/40 border border-purple-500/20 flex flex-col justify-between">
+                <div className="p-3.5 rounded-xl bg-purple-950/40 border border-purple-500/20 flex flex-col justify-between">
                   <div>
                     <span className="text-[10px] font-bold text-purple-400 uppercase font-mono">Shirt</span>
                     <p className="font-bold text-white line-clamp-1 mt-0.5">
@@ -679,7 +472,7 @@ export default function ProfilePage({
                   </div>
                   <button
                     onClick={onOpenMarketplace}
-                    className="mt-2 text-[11px] text-purple-300 hover:text-white flex items-center gap-1 font-semibold cursor-pointer"
+                    className="mt-3 text-[11px] text-purple-300 hover:text-white flex items-center gap-1 font-semibold cursor-pointer"
                   >
                     <span>Browse Shirts</span>
                     <ArrowRight className="w-3 h-3" />
@@ -687,7 +480,7 @@ export default function ProfilePage({
                 </div>
 
                 {/* Pants item */}
-                <div className="p-3 rounded-xl bg-purple-950/40 border border-purple-500/20 flex flex-col justify-between">
+                <div className="p-3.5 rounded-xl bg-purple-950/40 border border-purple-500/20 flex flex-col justify-between">
                   <div>
                     <span className="text-[10px] font-bold text-purple-400 uppercase font-mono">Pants</span>
                     <p className="font-bold text-white line-clamp-1 mt-0.5">
@@ -696,9 +489,45 @@ export default function ProfilePage({
                   </div>
                   <button
                     onClick={onOpenMarketplace}
-                    className="mt-2 text-[11px] text-purple-300 hover:text-white flex items-center gap-1 font-semibold cursor-pointer"
+                    className="mt-3 text-[11px] text-purple-300 hover:text-white flex items-center gap-1 font-semibold cursor-pointer"
                   >
                     <span>Browse Pants</span>
+                    <ArrowRight className="w-3 h-3" />
+                  </button>
+                </div>
+
+                {/* Face item */}
+                <div className="p-3.5 rounded-xl bg-purple-950/40 border border-purple-500/20 flex flex-col justify-between">
+                  <div>
+                    <span className="text-[10px] font-bold text-purple-400 uppercase font-mono">Face</span>
+                    <p className="font-bold text-white line-clamp-1 mt-0.5 capitalize">
+                      {(profile.selectedFaceId || 'classic-smile').replace('-', ' ')}
+                    </p>
+                  </div>
+                  <button
+                    onClick={onOpenAvatarEditor}
+                    className="mt-3 text-[11px] text-purple-300 hover:text-white flex items-center gap-1 font-semibold cursor-pointer"
+                  >
+                    <span>Change Face</span>
+                    <ArrowRight className="w-3 h-3" />
+                  </button>
+                </div>
+
+                {/* Hair item */}
+                <div className="p-3.5 rounded-xl bg-purple-950/40 border border-purple-500/20 flex flex-col justify-between">
+                  <div>
+                    <span className="text-[10px] font-bold text-purple-400 uppercase font-mono">Hairstyle</span>
+                    <p className="font-bold text-white line-clamp-1 mt-0.5 capitalize">
+                      {profile.selectedHairId && profile.selectedHairId !== 'none'
+                        ? profile.selectedHairId.replace('-', ' ')
+                        : 'Default Hair'}
+                    </p>
+                  </div>
+                  <button
+                    onClick={onOpenAvatarEditor}
+                    className="mt-3 text-[11px] text-purple-300 hover:text-white flex items-center gap-1 font-semibold cursor-pointer"
+                  >
+                    <span>Change Hair</span>
                     <ArrowRight className="w-3 h-3" />
                   </button>
                 </div>

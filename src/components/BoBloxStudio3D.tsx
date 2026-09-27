@@ -451,7 +451,9 @@ end`,
         () => {
           // Respawn callback after 3 seconds
           respawnPlayer();
-        }
+        },
+        shirtDataUrl,
+        pantsDataUrl
       );
     }
 
@@ -957,6 +959,7 @@ part.Touched:Connect(onTouch)`,
     scene.background = new THREE.Color(0x8cb6e8);
     scene.fog = new THREE.FogExp2(0x8cb6e8, 0.005);
     sceneRef.current = scene;
+    partMeshesMapRef.current.clear();
 
     // 2. Camera
     const camera = new THREE.PerspectiveCamera(65, width / height, 0.1, 1000);
@@ -1538,11 +1541,13 @@ part.Touched:Connect(onTouch)`,
     // Main Engine Animation Loop
     let animId = 0;
     let walkAnimTimer = 0;
-    let clock = new THREE.Clock();
+    let lastTime = performance.now();
 
     const animate = () => {
       animId = requestAnimationFrame(animate);
-      const delta = Math.min(clock.getDelta(), 0.08);
+      const now = performance.now();
+      const delta = Math.min((now - lastTime) / 1000, 0.08);
+      lastTime = now;
 
       // Baseplate visibility sync
       if (baseplateMeshRef.current) {
@@ -1816,6 +1821,7 @@ part.Touched:Connect(onTouch)`,
       window.removeEventListener('contextmenu', handleWindowContextMenu);
       luaRunnerRef.current.stop();
       ragdollManagerRef.current.cleanup();
+      partMeshesMapRef.current.clear();
     };
   }, [baseplateColor, avatarColors, selectedFaceId, shirtDataUrl, pantsDataUrl, handleTogglePlaytest, handleUndo, handleRedo, triggerPlayerDeath, playerWalkSpeed, playerHealth]);
 
@@ -1857,6 +1863,8 @@ part.Touched:Connect(onTouch)`,
         mesh.receiveShadow = true;
         scene.add(mesh);
         currentMap.set(part.id, mesh);
+      } else if (mesh.parent !== scene) {
+        scene.add(mesh);
       }
 
       mesh.position.set(part.position[0], part.position[1], part.position[2]);

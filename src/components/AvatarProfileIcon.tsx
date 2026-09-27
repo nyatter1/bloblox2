@@ -1,10 +1,8 @@
-import React, { useEffect, useRef } from 'react';
-import * as THREE from 'three';
+import React, { useEffect, useRef, useState } from 'react';
 import { AvatarColors, DEFAULT_GREY } from './AvatarViewer';
-import { getFaceTexture, createFaceMesh } from '../utils/faceTexture';
-import { attachShirtToLimbs } from '../utils/shirtTexture';
-import { attachPantsToLimbs } from '../utils/pantsTexture';
-import { createHairMesh } from '../utils/hairMesh';
+import { getFacePreviewUrl } from '../utils/faceTexture';
+import { SHIRT_COORDS } from '../utils/shirtTexture';
+import { PANTS_COORDS } from '../utils/pantsTexture';
 
 interface AvatarProfileIconProps {
   colors?: AvatarColors;
@@ -19,6 +17,26 @@ interface AvatarProfileIconProps {
   border?: boolean;
   fullBody?: boolean;
   framing?: 'head' | 'bust' | 'face-and-lower-body' | 'fullBody';
+}
+
+// Preloaded images cache for snappy 0ms re-renders
+const imageCache: Map<string, HTMLImageElement> = new Map();
+
+function loadImage(url: string): Promise<HTMLImageElement | null> {
+  if (!url) return Promise.resolve(null);
+  if (imageCache.has(url)) {
+    return Promise.resolve(imageCache.get(url)!);
+  }
+  return new Promise((resolve) => {
+    const img = new Image();
+    img.crossOrigin = 'anonymous';
+    img.onload = () => {
+      imageCache.set(url, img);
+      resolve(img);
+    };
+    img.onerror = () => resolve(null);
+    img.src = url;
+  });
 }
 
 export default function AvatarProfileIcon({
@@ -42,217 +60,264 @@ export default function AvatarProfileIcon({
   fullBody = false,
   framing = 'bust',
 }: AvatarProfileIconProps) {
-  const mountRef = useRef<HTMLDivElement | null>(null);
-  const rendererRef = useRef<THREE.WebGLRenderer | null>(null);
-  const sceneRef = useRef<THREE.Scene | null>(null);
-  const characterGroupRef = useRef<THREE.Group | null>(null);
+  const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const [dataUrl, setDataUrl] = useState<string | null>(null);
 
-  const pixelSize = typeof size === 'number'
-    ? size
-    : size === 'xs'
-    ? 24
-    : size === 'sm'
-    ? 32
-    : size === 'md'
-    ? 44
-    : size === 'lg'
-    ? 64
-    : size === 'xl'
-    ? 80
-    : size === '2xl'
-    ? 120
-    : 100;
+  const pixelSize =
+    typeof size === 'number'
+      ? size
+      : size === 'xs'
+      ? 24
+      : size === 'sm'
+      ? 32
+      : size === 'md'
+      ? 44
+      : size === 'lg'
+      ? 64
+      : size === 'xl'
+      ? 80
+      : size === '2xl'
+      ? 120
+      : 100;
 
   useEffect(() => {
-    const container = mountRef.current;
-    if (!container) return;
+    let isCancelled = false;
 
-    // 1. Scene
-    const scene = new THREE.Scene();
-    sceneRef.current = scene;
+    async function drawAvatar() {
+      const canvas = canvasRef.current || document.createElement('canvas');
+      const RENDER_RES = 256;
+      canvas.width = RENDER_RES;
+      canvas.height = RENDER_RES;
+      const ctx = canvas.getContext('2d');
+      if (!ctx) return;
 
-    // 2. Camera framing: precisely captures head, chest, left arm, and right arm (classic Roblox bust thumbnail)
-    const isFull = fullBody || framing === 'fullBody';
-    const isHeadOnly = framing === 'head';
-    
-    let camera: THREE.PerspectiveCamera;
-    if (isFull) {
-      camera = new THREE.PerspectiveCamera(36, 1, 0.1, 50);
-      camera.position.set(0.2, 2.5, 7.8);
-      camera.lookAt(0, 2.3, 0);
-    } else if (isHeadOnly) {
-      camera = new THREE.PerspectiveCamera(32, 1, 0.1, 50);
-      camera.position.set(0.1, 4.65, 3.8);
-      camera.lookAt(0, 4.65, 0);
-    } else {
-      // Default: 'bust' / 'face-and-lower-body'
-      // Frames the head, hair, upper/mid chest, and both left and right arms
-      camera = new THREE.PerspectiveCamera(43, 1, 0.1, 50);
-      camera.position.set(0.12, 3.9, 5.05);
-      camera.lookAt(0, 3.82, 0);
-    }
+      // Background
+      ctx.clearRect(0, 0, RENDER_RES, RENDER_RES);
 
-    // 3. WebGL Renderer
-    const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true, preserveDrawingBuffer: true });
-    renderer.setSize(pixelSize, pixelSize);
-    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-    renderer.shadowMap.enabled = true;
-    renderer.shadowMap.type = THREE.PCFShadowMap;
-    rendererRef.current = renderer;
+      const isFull = fullBody || framing === 'fullBody';
+      const isHeadOnly = framing === 'head';
 
-    container.innerHTML = '';
-    container.appendChild(renderer.domElement);
+      // Load face, shirt, pants images in parallel
+      const faceUrl = getFacePreviewUrl(selectedFaceId || 'classic-smile');
+      const [faceImg, shirtImg, pantsImg] = await Promise.all([
+        loadImage(faceUrl),
+        shirtDataUrl ? loadImage(shirtDataUrl) : Promise.resolve(null),
+        pantsDataUrl ? loadImage(pantsDataUrl) : Promise.resolve(null),
+      ]);
 
-    // 4. Neutral Natural Lighting (Accurate skin tone and face rendition with NO blue tint)
-    const ambientLight = new THREE.AmbientLight(0xffffff, 1.5);
-    scene.add(ambientLight);
+      if (isCancelled) return;
 
-    const sunLight = new THREE.DirectionalLight(0xfffdfa, 2.2);
-    sunLight.position.set(4, 8, 6);
-    scene.add(sunLight);
+      ctx.save();
 
-    const fillLight = new THREE.DirectionalLight(0xfff7ed, 0.7);
-    fillLight.position.set(-4, 3, -3);
-    scene.add(fillLight);
+      if (isHeadOnly) {
+        // --- 1. HEAD ONLY FRAMING ---
+        const hx = 64;
+        const hy = 40;
+        const hw = 128;
+        const hh = 150;
 
-    // 5. Character Mesh Construction
-    const characterGroup = new THREE.Group();
-    characterGroup.rotation.y = -0.1;
-    scene.add(characterGroup);
-    characterGroupRef.current = characterGroup;
+        // Head shadow
+        ctx.fillStyle = 'rgba(0,0,0,0.2)';
+        ctx.beginPath();
+        ctx.ellipse(128, 205, 55, 14, 0, 0, Math.PI * 2);
+        ctx.fill();
 
-    const createMat = (hex: string) =>
-      new THREE.MeshStandardMaterial({
-        color: new THREE.Color(hex || DEFAULT_GREY),
-        roughness: 0.45,
-        metalness: 0.08,
-      });
+        // Head Base
+        ctx.fillStyle = colors.head || DEFAULT_GREY;
+        ctx.beginPath();
+        ctx.roundRect(hx, hy + 20, hw, hh - 35, 18);
+        ctx.fill();
 
-    const headMat = createMat(colors.head);
-    const torsoMat = createMat(colors.torso);
-    const leftArmMat = createMat(colors.leftArm);
-    const rightArmMat = createMat(colors.rightArm);
-    const leftLegMat = createMat(colors.leftLeg);
-    const rightLegMat = createMat(colors.rightLeg);
+        // Top spherical cap
+        ctx.beginPath();
+        ctx.ellipse(hx + hw / 2, hy + 20, hw / 2, 28, 0, Math.PI, 0);
+        ctx.fill();
 
-    // --- Torso ---
-    const torsoGeo = new THREE.BoxGeometry(2, 2, 1);
-    const torsoMesh = new THREE.Mesh(torsoGeo, torsoMat);
-    torsoMesh.position.set(0, 3, 0);
-    characterGroup.add(torsoMesh);
+        // Bottom spherical cap
+        ctx.beginPath();
+        ctx.ellipse(hx + hw / 2, hy + hh - 15, hw / 2, 20, 0, 0, Math.PI);
+        ctx.fill();
 
-    // --- Head ---
-    const headGroup = new THREE.Group();
-    headGroup.position.set(0, 4.7, 0);
+        // Face Decal
+        if (faceImg) {
+          ctx.drawImage(faceImg, hx + 12, hy + 24, hw - 24, hw - 24);
+        }
 
-    const cylinderGeo = new THREE.CylinderGeometry(0.625, 0.625, 0.95, 32);
-    const headCylinder = new THREE.Mesh(cylinderGeo, headMat);
-    headGroup.add(headCylinder);
+        // Hair Overlay
+        if (selectedHairId && selectedHairId !== 'none') {
+          drawHair2D(ctx, selectedHairId, hairColor, hx + hw / 2, hy + 20, 1.3);
+        }
+      } else if (isFull) {
+        // --- 2. FULL BODY FRAMING ---
+        // Torso
+        const tx = 92;
+        const ty = 85;
+        const tw = 72;
+        const th = 72;
 
-    const topCapGeo = new THREE.SphereGeometry(0.625, 32, 14, 0, Math.PI * 2, 0, Math.PI / 2);
-    topCapGeo.scale(1, 0.35, 1);
-    const topCap = new THREE.Mesh(topCapGeo, headMat);
-    topCap.position.y = 0.475;
-    headGroup.add(topCap);
+        // Limbs
+        const armW = 34;
+        const armH = 72;
+        const legW = 34;
+        const legH = 76;
 
-    const botCapGeo = new THREE.SphereGeometry(0.625, 32, 14, 0, Math.PI * 2, Math.PI / 2, Math.PI / 2);
-    botCapGeo.scale(1, 0.35, 1);
-    const botCap = new THREE.Mesh(botCapGeo, headMat);
-    botCap.position.y = -0.475;
-    headGroup.add(botCap);
+        // Left Leg
+        ctx.fillStyle = colors.leftLeg || DEFAULT_GREY;
+        ctx.fillRect(tx + tw / 2, ty + th, legW, legH);
+        if (pantsImg) {
+          const lLeg = PANTS_COORDS.leftLeg.front;
+          ctx.drawImage(pantsImg, lLeg.x, lLeg.y, lLeg.w, lLeg.h, tx + tw / 2, ty + th, legW, legH);
+        }
 
-    // Face Texture
-    const faceMesh = createFaceMesh(selectedFaceId);
-    headGroup.add(faceMesh);
+        // Right Leg
+        ctx.fillStyle = colors.rightLeg || DEFAULT_GREY;
+        ctx.fillRect(tx + 2, ty + th, legW, legH);
+        if (pantsImg) {
+          const rLeg = PANTS_COORDS.rightLeg.front;
+          ctx.drawImage(pantsImg, rLeg.x, rLeg.y, rLeg.w, rLeg.h, tx + 2, ty + th, legW, legH);
+        }
 
-    // Hair if selected
-    if (selectedHairId && selectedHairId !== 'none') {
-      const hairMesh = createHairMesh(selectedHairId, hairColor);
-      if (hairMesh) {
-        headGroup.add(hairMesh);
+        // Leg divider
+        ctx.strokeStyle = 'rgba(0,0,0,0.2)';
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        ctx.moveTo(tx + tw / 2, ty + th);
+        ctx.lineTo(tx + tw / 2, ty + th + legH);
+        ctx.stroke();
+
+        // Torso
+        ctx.fillStyle = colors.torso || DEFAULT_GREY;
+        ctx.fillRect(tx, ty, tw, th);
+        if (shirtImg) {
+          const torso = SHIRT_COORDS.torso.front;
+          ctx.drawImage(shirtImg, torso.x, torso.y, torso.w, torso.h, tx, ty, tw, th);
+        }
+
+        // Left Arm
+        ctx.fillStyle = colors.leftArm || DEFAULT_GREY;
+        ctx.fillRect(tx + tw + 3, ty, armW, armH);
+        if (shirtImg) {
+          const lArm = SHIRT_COORDS.leftArm.front;
+          ctx.drawImage(shirtImg, lArm.x, lArm.y, lArm.w, lArm.h, tx + tw + 3, ty, armW, armH);
+        }
+
+        // Right Arm
+        ctx.fillStyle = colors.rightArm || DEFAULT_GREY;
+        ctx.fillRect(tx - armW - 3, ty, armW, armH);
+        if (shirtImg) {
+          const rArm = SHIRT_COORDS.rightArm.front;
+          ctx.drawImage(shirtImg, rArm.x, rArm.y, rArm.w, rArm.h, tx - armW - 3, ty, armW, armH);
+        }
+
+        // Head
+        const hx = 100;
+        const hy = 24;
+        const hw = 56;
+        const hh = 62;
+
+        ctx.fillStyle = colors.head || DEFAULT_GREY;
+        ctx.beginPath();
+        ctx.roundRect(hx, hy + 8, hw, hh - 16, 8);
+        ctx.fill();
+        ctx.beginPath();
+        ctx.ellipse(hx + hw / 2, hy + 8, hw / 2, 12, 0, Math.PI, 0);
+        ctx.fill();
+
+        // Face
+        if (faceImg) {
+          ctx.drawImage(faceImg, hx + 4, hy + 10, hw - 8, hw - 8);
+        }
+
+        // Hair
+        if (selectedHairId && selectedHairId !== 'none') {
+          drawHair2D(ctx, selectedHairId, hairColor, hx + hw / 2, hy + 8, 0.65);
+        }
+      } else {
+        // --- 3. BUST FRAMING (Roblox Standard Avatar Portrait) ---
+        // Torso
+        const tx = 76;
+        const ty = 126;
+        const tw = 104;
+        const th = 110;
+
+        // Arms
+        const armW = 48;
+        const armH = 110;
+
+        // Right Arm
+        ctx.fillStyle = colors.rightArm || DEFAULT_GREY;
+        ctx.fillRect(tx - armW - 4, ty, armW, armH);
+        if (shirtImg) {
+          const rArm = SHIRT_COORDS.rightArm.front;
+          ctx.drawImage(shirtImg, rArm.x, rArm.y, rArm.w, rArm.h, tx - armW - 4, ty, armW, armH);
+        }
+
+        // Left Arm
+        ctx.fillStyle = colors.leftArm || DEFAULT_GREY;
+        ctx.fillRect(tx + tw + 4, ty, armW, armH);
+        if (shirtImg) {
+          const lArm = SHIRT_COORDS.leftArm.front;
+          ctx.drawImage(shirtImg, lArm.x, lArm.y, lArm.w, lArm.h, tx + tw + 4, ty, armW, armH);
+        }
+
+        // Torso
+        ctx.fillStyle = colors.torso || DEFAULT_GREY;
+        ctx.fillRect(tx, ty, tw, th);
+        if (shirtImg) {
+          const torso = SHIRT_COORDS.torso.front;
+          ctx.drawImage(shirtImg, torso.x, torso.y, torso.w, torso.h, tx, ty, tw, th);
+        }
+
+        // Subtle arm separation lines
+        ctx.strokeStyle = 'rgba(0,0,0,0.2)';
+        ctx.lineWidth = 2;
+        ctx.strokeRect(tx, ty, tw, th);
+        ctx.strokeRect(tx - armW - 4, ty, armW, armH);
+        ctx.strokeRect(tx + tw + 4, ty, armW, armH);
+
+        // Head
+        const hx = 84;
+        const hy = 32;
+        const hw = 88;
+        const hh = 100;
+
+        ctx.fillStyle = colors.head || DEFAULT_GREY;
+        ctx.beginPath();
+        ctx.roundRect(hx, hy + 14, hw, hh - 28, 14);
+        ctx.fill();
+
+        ctx.beginPath();
+        ctx.ellipse(hx + hw / 2, hy + 14, hw / 2, 20, 0, Math.PI, 0);
+        ctx.fill();
+
+        ctx.beginPath();
+        ctx.ellipse(hx + hw / 2, hy + hh - 14, hw / 2, 14, 0, 0, Math.PI);
+        ctx.fill();
+
+        // Face
+        if (faceImg) {
+          ctx.drawImage(faceImg, hx + 8, hy + 16, hw - 16, hw - 16);
+        }
+
+        // Hair
+        if (selectedHairId && selectedHairId !== 'none') {
+          drawHair2D(ctx, selectedHairId, hairColor, hx + hw / 2, hy + 14, 0.95);
+        }
+      }
+
+      ctx.restore();
+
+      if (!isCancelled) {
+        setDataUrl(canvas.toDataURL('image/png'));
       }
     }
 
-    characterGroup.add(headGroup);
-
-    // --- Arms ---
-    const armGeo = new THREE.BoxGeometry(1, 2, 1);
-
-    const leftArmGroup = new THREE.Group();
-    leftArmGroup.position.set(1.5, 4, 0);
-    const leftArmMesh = new THREE.Mesh(armGeo, leftArmMat);
-    leftArmMesh.position.set(0, -1, 0);
-    leftArmGroup.add(leftArmMesh);
-    leftArmGroup.rotation.z = -0.05;
-    characterGroup.add(leftArmGroup);
-
-    const rightArmGroup = new THREE.Group();
-    rightArmGroup.position.set(-1.5, 4, 0);
-    const rightArmMesh = new THREE.Mesh(armGeo, rightArmMat);
-    rightArmMesh.position.set(0, -1, 0);
-    rightArmGroup.add(rightArmMesh);
-    rightArmGroup.rotation.z = 0.05;
-    characterGroup.add(rightArmGroup);
-
-    // --- Legs ---
-    const legGeo = new THREE.BoxGeometry(1, 2, 1);
-    const leftLegGroup = new THREE.Group();
-    leftLegGroup.position.set(0.5, 2, 0);
-    const leftLegMesh = new THREE.Mesh(legGeo, leftLegMat);
-    leftLegMesh.position.set(0, -1, 0);
-    leftLegGroup.add(leftLegMesh);
-    characterGroup.add(leftLegGroup);
-
-    const rightLegGroup = new THREE.Group();
-    rightLegGroup.position.set(-0.5, 2, 0);
-    const rightLegMesh = new THREE.Mesh(legGeo, rightLegMat);
-    rightLegMesh.position.set(0, -1, 0);
-    rightLegGroup.add(rightLegMesh);
-    characterGroup.add(rightLegGroup);
-
-    const triggerRender = () => {
-      renderer.render(scene, camera);
-    };
-
-    // Attach Shirt Texture if equipped
-    let detachShirt = () => {};
-    if (shirtDataUrl) {
-      detachShirt = attachShirtToLimbs(torsoMesh, leftArmGroup, rightArmGroup, shirtDataUrl, triggerRender);
-    }
-
-    // Attach Pants Texture if equipped
-    let detachPants = () => {};
-    if (pantsDataUrl) {
-      detachPants = attachPantsToLimbs(torsoMesh, leftLegGroup, rightLegGroup, pantsDataUrl, triggerRender);
-    }
-
-    // Render initial snapshot
-    triggerRender();
-
-    // Render again on next frame in case images load immediately from memory/cache
-    const frameId = requestAnimationFrame(triggerRender);
+    drawAvatar();
 
     return () => {
-      cancelAnimationFrame(frameId);
-      detachShirt();
-      detachPants();
-      renderer.dispose();
-      cylinderGeo.dispose();
-      topCapGeo.dispose();
-      botCapGeo.dispose();
-      faceMesh.geometry.dispose();
-      torsoGeo.dispose();
-      armGeo.dispose();
-      legGeo.dispose();
-      headMat.dispose();
-      torsoMat.dispose();
-      leftArmMat.dispose();
-      rightArmMat.dispose();
-      leftLegMat.dispose();
-      rightLegMat.dispose();
-      (faceMesh.material as THREE.Material).dispose();
+      isCancelled = true;
     };
-  }, [colors, selectedFaceId, shirtDataUrl, pantsDataUrl, selectedHairId, hairColor, pixelSize, fullBody]);
+  }, [colors, selectedFaceId, shirtDataUrl, pantsDataUrl, selectedHairId, hairColor, fullBody, framing]);
 
   return (
     <div
@@ -262,10 +327,101 @@ export default function AvatarProfileIcon({
       } ${
         border ? 'border border-purple-400/40 shadow-md shadow-purple-950/60' : ''
       } ${className}`}
-      title="3D Avatar Portrait"
+      title="Avatar Portrait"
     >
-      {/* 3D WebGL Canvas container */}
-      <div ref={mountRef} className="w-full h-full flex items-center justify-center pointer-events-none" />
+      {dataUrl ? (
+        <img
+          src={dataUrl}
+          alt="Avatar"
+          className="w-full h-full object-contain pointer-events-none"
+        />
+      ) : (
+        <div className="w-full h-full flex items-center justify-center">
+          <div className="w-4 h-4 rounded-full border-2 border-purple-400 border-t-transparent animate-spin" />
+        </div>
+      )}
     </div>
   );
+}
+
+/**
+ * Procedural 2D hair drawing matching Roblox classic hair models
+ */
+function drawHair2D(
+  ctx: CanvasRenderingContext2D,
+  hairId: string,
+  hairColor: string,
+  centerX: number,
+  topY: number,
+  scale: number
+) {
+  ctx.save();
+  ctx.translate(centerX, topY);
+  ctx.scale(scale, scale);
+  ctx.fillStyle = hairColor || '#4a2e1b';
+  ctx.strokeStyle = 'rgba(0,0,0,0.25)';
+  ctx.lineWidth = 2;
+
+  if (hairId.includes('bacon') || hairId === 'bacon-hair') {
+    // Pal Hair / Bacon Hair: Top volume + side wavy strands
+    ctx.beginPath();
+    ctx.ellipse(0, -6, 52, 28, 0, Math.PI, 0);
+    ctx.fill();
+    // Side bangs
+    ctx.beginPath();
+    ctx.roundRect(-52, -6, 22, 54, 8);
+    ctx.roundRect(30, -6, 22, 54, 8);
+    ctx.fill();
+    // Front fringe
+    ctx.beginPath();
+    ctx.moveTo(-45, -6);
+    ctx.quadraticCurveTo(0, 16, 45, -6);
+    ctx.quadraticCurveTo(20, -14, -45, -6);
+    ctx.fill();
+  } else if (hairId.includes('horns') || hairId.includes('messy')) {
+    // Messy hair with horns
+    ctx.beginPath();
+    ctx.ellipse(0, -8, 54, 32, 0, Math.PI, 0);
+    ctx.fill();
+    // Spikes
+    for (let i = -40; i <= 40; i += 20) {
+      ctx.beginPath();
+      ctx.moveTo(i - 10, -12);
+      ctx.lineTo(i, -36);
+      ctx.lineTo(i + 10, -12);
+      ctx.fill();
+    }
+    // Horns
+    ctx.fillStyle = '#1e1b4b';
+    ctx.beginPath();
+    ctx.moveTo(-34, -20);
+    ctx.quadraticCurveTo(-54, -46, -42, -56);
+    ctx.quadraticCurveTo(-38, -42, -26, -24);
+    ctx.fill();
+    ctx.beginPath();
+    ctx.moveTo(34, -20);
+    ctx.quadraticCurveTo(54, -46, 42, -56);
+    ctx.quadraticCurveTo(38, -42, 26, -24);
+    ctx.fill();
+  } else if (hairId.includes('blue') || hairId.includes('shaggy')) {
+    // Shaggy blue hair
+    ctx.beginPath();
+    ctx.ellipse(0, -6, 54, 30, 0, Math.PI, 0);
+    ctx.fill();
+    ctx.beginPath();
+    ctx.roundRect(-54, -4, 24, 60, 10);
+    ctx.roundRect(30, -4, 24, 60, 10);
+    ctx.fill();
+  } else {
+    // Generic classic Roblox hair dome & fringe
+    ctx.beginPath();
+    ctx.ellipse(0, -6, 50, 26, 0, Math.PI, 0);
+    ctx.fill();
+    ctx.beginPath();
+    ctx.roundRect(-50, -4, 18, 42, 8);
+    ctx.roundRect(32, -4, 18, 42, 8);
+    ctx.fill();
+  }
+
+  ctx.restore();
 }

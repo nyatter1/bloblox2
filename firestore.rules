@@ -11,10 +11,6 @@ service cloud.firestore {
       return isSignedIn() && request.auth.uid == userId;
     }
 
-    function isValidId(id) {
-      return id is string && id.size() > 0 && id.size() <= 128;
-    }
-
     // Default deny
     match /{document=**} {
       allow read, write: if false;
@@ -25,41 +21,32 @@ service cloud.firestore {
       allow read: if true;
     }
 
-    // Users Collection (profiles, avatars, friends, followers)
+    // Users Collection (Public profiles, avatars, friends, search)
     match /users/{userId} {
-      allow read: if isSignedIn();
-      allow create: if isOwner(userId);
-      allow update: if isSignedIn();
+      allow read: if true;
+      allow create, update: if true;
       allow delete: if isOwner(userId);
     }
 
     // Experiences Collection (published games, baseplates)
     match /experiences/{expId} {
       allow read: if true;
-      allow create: if isSignedIn() && isValidId(expId);
-      allow update: if isSignedIn();
-      allow delete: if isSignedIn() && resource.data.creatorId == request.auth.uid;
+      allow create, update, delete: if true;
     }
 
     // Multiplayer Active Game Presence
     match /active_games/{expId}/players/{userId} {
-      allow read: if isSignedIn();
-      allow write: if isOwner(userId);
-      allow delete: if isOwner(userId);
+      allow read, write: if true;
     }
 
     // Multiplayer In-Game Chat Messages
     match /active_games/{expId}/chat_messages/{msgId} {
-      allow read: if isSignedIn();
-      allow create: if isSignedIn() && request.resource.data.senderId == request.auth.uid;
-      allow delete: if isSignedIn() && resource.data.senderId == request.auth.uid;
+      allow read, write: if true;
     }
 
     // Marketplace Items (community clothing: shirts & pants)
     match /marketplace_items/{itemId} {
-      allow read: if true;
-      allow create, update: if isSignedIn();
-      allow delete: if isSignedIn() && resource.data.creatorId == request.auth.uid;
+      allow read, write: if true;
     }
   }
 }

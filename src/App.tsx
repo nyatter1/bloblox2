@@ -32,7 +32,7 @@ import FriendsTopBar from './components/FriendsTopBar';
 import UserProfileModal from './components/UserProfileModal';
 import Marketplace from './components/Marketplace';
 import ProfilePage from './components/ProfilePage';
-import VerifiedBadge, { isOwnerUser } from './components/VerifiedBadge';
+import VerifiedBadge, { isOwnerUser, isVerifiedUser, isStaffUser } from './components/VerifiedBadge';
 import {
   UserProfile,
   subscribeUserProfile,
@@ -792,7 +792,7 @@ export default function App() {
                     <span className="text-purple-300 font-normal hidden xs:inline">Welcome,</span>
                     <span className="font-extrabold text-white tracking-wide group-hover:text-purple-200 flex items-center gap-1">
                       <span>{currentUser.username}</span>
-                      {isOwnerUser(currentUser.username) && <VerifiedBadge size="sm" />}
+                      {isVerifiedUser(currentUser.username) && <VerifiedBadge username={currentUser.username} size="sm" />}
                     </span>
                   </button>
 
@@ -807,6 +807,8 @@ export default function App() {
                       selectedFaceId={selectedFaceId}
                       shirtDataUrl={shirtDataUrl}
                       pantsDataUrl={pantsDataUrl}
+                      selectedHairId={selectedHairId}
+                      hairColor={hairColor}
                       size={28}
                       shape="circle"
                       border={false}
@@ -1076,7 +1078,7 @@ export default function App() {
                           <div>
                             <h1 className="text-2xl sm:text-3xl font-display font-black text-white tracking-tight flex items-center gap-2 group-hover:text-purple-200 transition-colors">
                               <span>Welcome, {currentUser.username}</span>
-                              {isOwnerUser(currentUser.username) && <VerifiedBadge size="md" />}
+                              {isVerifiedUser(currentUser.username) && <VerifiedBadge username={currentUser.username} size="md" />}
                             </h1>
                             <p className="text-purple-300/80 text-xs sm:text-sm mt-0.5">
                               Explore your published experiences, view your profile, or build in BoBlox Studio.
@@ -1138,17 +1140,17 @@ export default function App() {
                                     <Boxes className="w-6 h-6 text-purple-300" />
                                   </div>
 
-                                  {/* Owner Moderation Quick Delete on Card */}
-                                  {isOwnerUser(currentUser.username) && (
+                                  {/* Staff Moderation Quick Delete on Card */}
+                                  {isStaffUser(currentUser.username) && (
                                     <button
                                       onClick={(e) => {
                                         e.stopPropagation();
-                                        if (window.confirm(`[Owner Moderation] Delete experience "${exp.name}"?`)) {
+                                        if (window.confirm(`[Moderation] Delete experience "${exp.name}"?`)) {
                                           handleDeleteExperience(exp.id);
                                         }
                                       }}
                                       className="absolute top-2.5 left-2.5 p-1.5 rounded-lg bg-red-600/90 hover:bg-red-500 text-white z-20 shadow-md transition-colors cursor-pointer"
-                                      title="Delete Game (BoBlox Owner Moderation)"
+                                      title="Delete Game (BoBlox Moderation)"
                                     >
                                       <Trash2 className="w-3.5 h-3.5" />
                                     </button>
@@ -1182,7 +1184,7 @@ export default function App() {
                                     >
                                       {exp.creatorUsername || 'Builder'}
                                     </span>
-                                    {isOwnerUser(exp.creatorUsername) && <VerifiedBadge size="sm" />}
+                                    {isVerifiedUser(exp.creatorUsername) && <VerifiedBadge username={exp.creatorUsername} size="sm" />}
                                   </div>
                                   <p className="text-[11px] text-purple-300/70 line-clamp-1">
                                     {exp.description || 'Custom Sandbox World'}

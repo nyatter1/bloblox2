@@ -12,7 +12,7 @@ import {
   ExternalLink
 } from 'lucide-react';
 import AvatarProfileIcon from './AvatarProfileIcon';
-import VerifiedBadge, { isOwnerUser } from './VerifiedBadge';
+import VerifiedBadge, { isVerifiedUser } from './VerifiedBadge';
 import {
   UserProfile,
   subscribeFriendsList,
@@ -145,7 +145,7 @@ export default function FriendsTopBar({
                       <div className="truncate">
                         <p className="text-xs font-bold text-white group-hover:text-purple-300 transition-colors truncate flex items-center gap-1">
                           <span>{user.displayName || user.username}</span>
-                          {isOwnerUser(user.username) && <VerifiedBadge size="sm" />}
+                          {isVerifiedUser(user.username) && <VerifiedBadge username={user.username} size="sm" />}
                         </p>
                         <p className="text-[10px] text-purple-400/60 font-mono">@{user.username}</p>
                       </div>
@@ -200,7 +200,7 @@ export default function FriendsTopBar({
                 <div className="text-left min-w-[70px] max-w-[120px]">
                   <p className="text-xs font-bold text-white group-hover:text-purple-300 transition-colors truncate flex items-center gap-1">
                     <span>{friend.username}</span>
-                    {isOwnerUser(friend.username) && <VerifiedBadge size="sm" />}
+                    {isVerifiedUser(friend.username) && <VerifiedBadge username={friend.username} size="sm" />}
                   </p>
                   {isInGame ? (
                     <p className="text-[10px] text-emerald-400 font-semibold truncate flex items-center gap-1">
