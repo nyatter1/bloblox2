@@ -1,0 +1,105 @@
+{
+  "entities": {
+    "User": {
+      "title": "User",
+      "description": "BoBlox user profile, authentication, avatar settings, and social relationships",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "username": { "type": "string", "maxLength": 30 },
+        "email": { "type": "string", "maxLength": 128 },
+        "displayName": { "type": "string", "maxLength": 30 },
+        "joinedDate": { "type": "string", "maxLength": 40 },
+        "createdAt": { "type": "number" },
+        "lastActive": { "type": "number" },
+        "currentExperienceId": { "type": "string", "maxLength": 128 },
+        "friends": { "type": "array" },
+        "friendRequests": { "type": "array" },
+        "followers": { "type": "array" },
+        "following": { "type": "array" },
+        "avatarColors": { "type": "object" },
+        "selectedFaceId": { "type": "string", "maxLength": 64 },
+        "selectedAccessoryId": { "type": "string", "maxLength": 64 },
+        "selectedHairId": { "type": "string", "maxLength": 64 },
+        "hairColor": { "type": "string", "maxLength": 32 },
+        "shirtDataUrl": { "type": "string" },
+        "pantsDataUrl": { "type": "string" }
+      },
+      "required": ["id", "username"]
+    },
+    "Experience": {
+      "title": "Experience",
+      "description": "User created 3D Roblox style experiences and sandbox baseplates",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "name": { "type": "string", "maxLength": 80 },
+        "description": { "type": "string", "maxLength": 500 },
+        "creatorId": { "type": "string", "maxLength": 128 },
+        "creatorUsername": { "type": "string", "maxLength": 30 },
+        "published": { "type": "boolean" },
+        "visits": { "type": "number" },
+        "likes": { "type": "number" },
+        "dislikes": { "type": "number" },
+        "favorites": { "type": "number" },
+        "parts": { "type": "array" },
+        "activePlayers": { "type": "number" },
+        "createdAt": { "type": "number" },
+        "lastUpdated": { "type": "number" }
+      },
+      "required": ["id", "name", "creatorId"]
+    },
+    "GamePlayer": {
+      "title": "GamePlayer",
+      "description": "Real-time multiplayer player presence in a live game session",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string", "maxLength": 128 },
+        "username": { "type": "string", "maxLength": 30 },
+        "position": { "type": "array" },
+        "rotationY": { "type": "number" },
+        "isMoving": { "type": "boolean" },
+        "avatarColors": { "type": "object" },
+        "selectedFaceId": { "type": "string", "maxLength": 64 },
+        "shirtDataUrl": { "type": "string" },
+        "pantsDataUrl": { "type": "string" },
+        "selectedHairId": { "type": "string", "maxLength": 64 },
+        "hairColor": { "type": "string", "maxLength": 32 },
+        "currentChat": { "type": "object" },
+        "lastPing": { "type": "number" }
+      },
+      "required": ["userId", "username", "lastPing"]
+    },
+    "ChatMessage": {
+      "title": "ChatMessage",
+      "description": "In-game multiplayer chat messages",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "senderId": { "type": "string", "maxLength": 128 },
+        "senderUsername": { "type": "string", "maxLength": 30 },
+        "message": { "type": "string", "maxLength": 200 },
+        "timestamp": { "type": "number" }
+      },
+      "required": ["id", "senderId", "senderUsername", "message", "timestamp"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": "User",
+      "description": "User profiles and social graph"
+    },
+    "/experiences/{expId}": {
+      "schema": "Experience",
+      "description": "Custom built games and experiences"
+    },
+    "/active_games/{expId}/players/{userId}": {
+      "schema": "GamePlayer",
+      "description": "Multiplayer live presence in an experience"
+    },
+    "/active_games/{expId}/chat_messages/{msgId}": {
+      "schema": "ChatMessage",
+      "description": "Live in-game chat messages"
+    }
+  }
+}
