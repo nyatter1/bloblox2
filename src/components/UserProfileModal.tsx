@@ -184,6 +184,8 @@ export default function UserProfileModal({
                   pantsDataUrl={profile.pantsDataUrl}
                   selectedHairId={profile.selectedHairId}
                   hairColor={profile.hairColor}
+                  customHairObj={profile.customHairObj}
+                  selectedAccessoryId={profile.selectedAccessoryId}
                   size={100}
                   shape="rounded"
                   border={false}

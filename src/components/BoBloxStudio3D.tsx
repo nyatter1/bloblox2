@@ -54,6 +54,8 @@ import { AvatarColors } from './AvatarViewer';
 import { createFaceMesh } from '../utils/faceTexture';
 import { attachShirtToLimbs } from '../utils/shirtTexture';
 import { attachPantsToLimbs } from '../utils/pantsTexture';
+import { createHairMesh, createHairMeshAsync } from '../utils/hairMesh';
+import { createAccessoryMesh } from '../utils/accessoryMesh';
 import { applyTextureProperties, PRESET_TEXTURES } from '../utils/textureMapping';
 import { LuaScriptRunner, ScriptLogMessage } from '../utils/luaScriptEngine';
 import { RagdollShatterManager } from '../utils/ragdollShatter';
@@ -68,6 +70,10 @@ interface BoBloxStudio3DProps {
   selectedFaceId: string;
   shirtDataUrl: string | null;
   pantsDataUrl: string | null;
+  selectedHairId?: string;
+  hairColor?: string;
+  customHairObj?: string | null;
+  selectedAccessoryId?: string;
 }
 
 type StudioToolMode = 'select' | 'move' | 'scale' | 'rotate';
@@ -90,6 +96,10 @@ export default function BoBloxStudio3D({
   selectedFaceId,
   shirtDataUrl,
   pantsDataUrl,
+  selectedHairId = 'none',
+  hairColor = '#4a2e1b',
+  customHairObj = null,
+  selectedAccessoryId = 'none',
 }: BoBloxStudio3DProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
 
@@ -453,7 +463,11 @@ end`,
           respawnPlayer();
         },
         shirtDataUrl,
-        pantsDataUrl
+        pantsDataUrl,
+        selectedHairId,
+        hairColor,
+        customHairObj,
+        selectedAccessoryId
       );
     }
 
@@ -1132,10 +1146,43 @@ part.Touched:Connect(onTouch)`,
 
     const headGroup = new THREE.Group();
     headGroup.position.y = 4.7;
-    const headCyl = new THREE.Mesh(new THREE.CylinderGeometry(0.625, 0.625, 0.95, 24), makeMat(avatarColors.head));
+    const headMat = makeMat(avatarColors.head);
+    const headCyl = new THREE.Mesh(new THREE.CylinderGeometry(0.625, 0.625, 0.95, 36), headMat);
     headGroup.add(headCyl);
+
+    const topCap = new THREE.Mesh(new THREE.SphereGeometry(0.625, 36, 16, 0, Math.PI * 2, 0, Math.PI / 2), headMat);
+    topCap.scale.set(1, 0.35, 1);
+    topCap.position.y = 0.475;
+    headGroup.add(topCap);
+
+    const botCap = new THREE.Mesh(new THREE.SphereGeometry(0.625, 36, 16, 0, Math.PI * 2, Math.PI / 2, Math.PI / 2), headMat);
+    botCap.scale.set(1, 0.35, 1);
+    botCap.position.y = -0.475;
+    headGroup.add(botCap);
+
     const faceMesh = createFaceMesh(selectedFaceId);
     headGroup.add(faceMesh);
+
+    // Synchronous & Asynchronous 3D Hair
+    if (selectedHairId && selectedHairId !== 'none') {
+      const syncHair = createHairMesh(selectedHairId, hairColor || '#4a2e1b', customHairObj);
+      if (syncHair) {
+        headGroup.add(syncHair);
+      } else {
+        createHairMeshAsync(selectedHairId, hairColor || '#4a2e1b', customHairObj)
+          .then((asyncHair) => {
+            if (asyncHair) headGroup.add(asyncHair);
+          })
+          .catch(() => {});
+      }
+    }
+
+    // Accessory
+    if (selectedAccessoryId && selectedAccessoryId !== 'none') {
+      const accMesh = createAccessoryMesh(selectedAccessoryId);
+      if (accMesh) headGroup.add(accMesh);
+    }
+
     playerGroup.add(headGroup);
 
     const leftArmGroup = new THREE.Group();

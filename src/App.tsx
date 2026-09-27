@@ -731,6 +731,10 @@ export default function App() {
               selectedFaceId={selectedFaceId}
               shirtDataUrl={shirtDataUrl}
               pantsDataUrl={pantsDataUrl}
+              selectedHairId={selectedHairId}
+              hairColor={hairColor}
+              customHairObj={customHairObj}
+              selectedAccessoryId={selectedAccessoryId}
             />
           ) : (
             <>
@@ -809,6 +813,8 @@ export default function App() {
                       pantsDataUrl={pantsDataUrl}
                       selectedHairId={selectedHairId}
                       hairColor={hairColor}
+                      customHairObj={customHairObj}
+                      selectedAccessoryId={selectedAccessoryId}
                       size={28}
                       shape="circle"
                       border={false}
@@ -963,6 +969,8 @@ export default function App() {
                           pantsDataUrl={pantsDataUrl}
                           selectedHairId={selectedHairId}
                           hairColor={hairColor}
+                          customHairObj={customHairObj}
+                          selectedAccessoryId={selectedAccessoryId}
                           size={22}
                           shape="circle"
                           border={false}
@@ -1070,6 +1078,8 @@ export default function App() {
                             pantsDataUrl={pantsDataUrl}
                             selectedHairId={selectedHairId}
                             hairColor={hairColor}
+                            customHairObj={customHairObj}
+                            selectedAccessoryId={selectedAccessoryId}
                             size={68}
                             shape="rounded"
                             border={true}

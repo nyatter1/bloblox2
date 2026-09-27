@@ -201,6 +201,8 @@ export default function ProfilePage({
                 pantsDataUrl={profile.pantsDataUrl}
                 selectedHairId={profile.selectedHairId}
                 hairColor={profile.hairColor}
+                customHairObj={profile.customHairObj}
+                selectedAccessoryId={profile.selectedAccessoryId}
                 size={96}
                 shape="rounded"
                 border={false}
@@ -243,6 +245,8 @@ export default function ProfilePage({
                     pantsDataUrl={profile.pantsDataUrl}
                     selectedHairId={profile.selectedHairId}
                     hairColor={profile.hairColor}
+                    customHairObj={profile.customHairObj}
+                    selectedAccessoryId={profile.selectedAccessoryId}
                     size={112}
                     shape="rounded"
                     border={false}
